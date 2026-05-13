@@ -1,31 +1,39 @@
 /**
- * ai-web-fetcher entry point — SCAFFOLD ONLY.
+ * ai-web-fetcher entry point.
  *
- * See README + ai-ops-meta `architect-backlog.md` Phase 3 grounding-source
- * agents section. Design lives in `docs/architecture.md` §6.8 in the same
- * repo. Introduces the `external-read` blast-radius tier.
+ * State as of sub-item 2 (this PR): main runs the boot self-check (parse
+ * `vendor/web-allowlist.yaml` → DNS resolve → HEAD probe). On success, it
+ * logs boot OK and exits 0 — the RPC server itself ships in sub-item 4
+ * once Brave Search + the HTTP-GET fetcher (sub-item 3) are wired through.
  *
- * When implemented, this file boots:
- *   1. Boot self-check (AP-3 + AP-4): DNS-resolve + HEAD-probe every entry in
- *      `registry/web-allowlist.yaml`. Failure = exit-1.
- *   2. Brave Search API client (search backend).
- *   3. Plain HTTP GET + Mozilla Readability (fetch backend).
- *   4. Unix-socket RPC server accepting `web.search.v1` + `web.fetch.v1`.
- *   5. Per-fetch provenance row + output post-filter (drops URLs not in
- *      provenance set).
+ * Until sub-item 4, this is not a long-running service. The daily review
+ * timer can invoke it to surface allowlist drift as an event in ops.db.
  */
 
+import { promises as dnsPromises } from 'node:dns';
+
+import { runBootCheckOrExit } from './boot-check.js';
+
 async function main(): Promise<void> {
+  const allowlist = await runBootCheckOrExit({
+    fetch: globalThis.fetch,
+    dns: {
+      resolve4: dnsPromises.resolve4,
+      resolve6: dnsPromises.resolve6,
+    },
+  });
   // eslint-disable-next-line no-console
   console.error(
     JSON.stringify({
-      level: 'error',
+      level: 'info',
       service: 'ai-web-fetcher',
-      msg: 'scaffold_only',
-      hint: 'see ai-ops-meta architect-backlog.md Phase 3 grounding-source agents',
+      msg: 'boot_check_ok',
+      allowlist_size: allowlist.size,
+      next: 'sub_item_3_adapters_and_sub_item_4_rpc',
     }),
   );
-  process.exit(1);
+  // Sub-items 3 + 4 will replace this exit with the long-running RPC server.
+  process.exit(0);
 }
 
 main().catch((err: unknown) => {
