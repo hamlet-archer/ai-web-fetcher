@@ -1,0 +1,88 @@
+# Vendored copy of the web-fetcher v1 allowlist.
+#
+# Canonical source: ai-ops-meta `registry/web-allowlist.yaml` (sibling PR
+# pending — until that meta-side file ships, this vendor copy is the only
+# source). Alpha-stage rule + reproducibility: the agent reads this file
+# at boot, not a live cross-repo fetch.
+#
+# Each entry:
+#   - domain     — bare hostname; the boot self-check DNS-resolves it.
+#   - purpose    — one-line human note on why the domain is allowed.
+#   - ttl_class  — `insurance-med` | `airline` | `generic` (web-config.ts).
+#   - added_at   — ISO 8601 date when the entry landed in the allowlist.
+#
+# Adding an entry: file a runner PR to this vendor file AND the meta-side
+# canonical (when it lands). Removing an entry: same. The boot self-check
+# fails loud on DNS resolution / HEAD probe failure — that's the dead-entry
+# canary, not the only failure mode.
+
+entries:
+  # ---- Insurance comparators (ttl_class: insurance-med, 24h refresh) ----
+  - domain: comparethemarket.com
+    purpose: insurance comparator — motor/home/life
+    ttl_class: insurance-med
+    added_at: 2026-05-13
+  - domain: gocompare.com
+    purpose: insurance comparator — motor/home/travel
+    ttl_class: insurance-med
+    added_at: 2026-05-13
+  - domain: confused.com
+    purpose: insurance comparator — motor/home
+    ttl_class: insurance-med
+    added_at: 2026-05-13
+
+  # ---- Airline / flight info (ttl_class: airline, 1h refresh) ----
+  - domain: ba.com
+    purpose: British Airways flight search + status
+    ttl_class: airline
+    added_at: 2026-05-13
+  - domain: united.com
+    purpose: United Airlines flight search + status
+    ttl_class: airline
+    added_at: 2026-05-13
+  - domain: easyjet.com
+    purpose: easyJet flight search + status
+    ttl_class: airline
+    added_at: 2026-05-13
+  - domain: ryanair.com
+    purpose: Ryanair flight search + status
+    ttl_class: airline
+    added_at: 2026-05-13
+
+  # ---- Governmental info pages (ttl_class: generic, 1w refresh) ----
+  - domain: gov.uk
+    purpose: UK government services + guidance
+    ttl_class: generic
+    added_at: 2026-05-13
+  - domain: nhs.uk
+    purpose: UK National Health Service clinical guidance
+    ttl_class: generic
+    added_at: 2026-05-13
+  - domain: hmrc.gov.uk
+    purpose: UK tax authority guidance
+    ttl_class: generic
+    added_at: 2026-05-13
+
+  # ---- Vendor-neutral knowledge bases (ttl_class: generic, 1w refresh) ----
+  - domain: en.wikipedia.org
+    purpose: general-purpose neutral reference
+    ttl_class: generic
+    added_at: 2026-05-13
+  - domain: mozilla.org
+    purpose: web standards + developer docs
+    ttl_class: generic
+    added_at: 2026-05-13
+  - domain: developer.mozilla.org
+    purpose: MDN web technology reference
+    ttl_class: generic
+    added_at: 2026-05-13
+  - domain: nodejs.org
+    purpose: Node.js runtime + API docs
+    ttl_class: generic
+    added_at: 2026-05-13
+
+  # ---- Anthropic-specific (ttl_class: generic) ----
+  - domain: docs.anthropic.com
+    purpose: Anthropic API + Claude documentation
+    ttl_class: generic
+    added_at: 2026-05-13
