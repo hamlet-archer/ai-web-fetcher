@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops.hamlet-archer/contracts/web.fetch.v1.json",
+  "title": "web.fetch (v1) — RPC request",
+  "description": "Page-fetch request for the web-fetcher Unix-socket RPC. Filed 2026-05-10 with v0.45 §6.8 — sibling to `web.search.v1`. Caller hands a URL; the agent fetches it, runs Mozilla Readability to extract main-article plaintext, and returns the result with provenance.\n\nTransport: Unix socket at `/var/run/ai-web-fetcher/query.sock`. Caller authenticated via SO_PEERCRED.\n\nv1 backend: plain HTTP GET (`User-Agent: ai-web-fetcher/<version>`) + Mozilla Readability. No headless browser — JS-rendered SPAs degrade to 'low_signal' in the response and the consumer treats them as `(external lookup unavailable for X)` per AP-1.\n\nAllowlist gate: the URL's hostname MUST resolve to an entry on `registry/web-allowlist.yaml`. Off-allowlist hostnames return `not_allowlisted` — fail loud, never silent fall-through (AP-1). The receiver enforces the per-day / per-task / per-month spend caps + the per-fetch byte cap (`WEB_FETCH_MAX_BYTES=200000`) and timeout (`WEB_FETCH_TIMEOUT_MS=8000`).\n\nPrompt-injection mitigations: the receiver returns plaintext only (never raw HTML); the consumer is expected to wrap returned text in `<UNTRUSTED_WEB origin sha256>` delimiters before any LLM ingestion. Output post-filter on the consumer side drops URLs not in the per-fetch provenance set. Per-fetch provenance row is written to ops.db `events` (kind: `web.fetch.completed`) with sha256 of fetched bytes for audit.\n\nStatus: draft. Do not flip to active until web-fetcher implementation ships and its boot self-check passes once on `golden-ai-ops`.",
+  "type": "object",
+  "required": [
+    "contract_id",
+    "trace_id",
+    "dedupe_key",
+    "source_ref",
+    "caller_agent_id",
+    "url"
+  ],
+  "properties": {
+    "contract_id": {
+      "type": "string",
+      "const": "web.fetch.v1",
+      "description": "Contract identifier. Must be the literal string 'web.fetch.v1'."
+    },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "UUIDv7. Logged in the per-fetch provenance row."
+    },
+    "dedupe_key": {
+      "type": "string",
+      "description": "SHA256 of '<caller_agent_id>:web.fetch.v1:<url_canonical>:<freshness>'. Cache hit short-circuits to the cached row when freshness != 'realtime'."
+    },
+    "source_ref": {
+      "type": "string",
+      "description": "URL or ID of the caller context that triggered this fetch (e.g. a task UUID, a Runs row id). Stored in the provenance row for audit."
+    },
+    "caller_agent_id": {
+      "type": "string",
+      "description": "Self-asserted agent ID of the caller. Authorisation decisions key off SO_PEERCRED uid."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2048,
+      "description": "Absolute http(s) URL to fetch. Hostname MUST resolve to an entry on `registry/web-allowlist.yaml`; off-allowlist returns `not_allowlisted`. Fragment identifiers are stripped before fetch (cache key is hostname + path + query)."
+    },
+    "freshness": {
+      "type": "string",
+      "enum": ["cached", "realtime"],
+      "default": "cached",
+      "description": "Cache policy. `cached` returns the existing row if it's within the per-domain TTL (TTL_INSURANCE_MED_S=86400, TTL_AIRLINE_S=3600, TTL_GENERIC_S=604800 — set by hostname pattern in the agent's config). `realtime` bypasses the cache and forces a re-fetch; reserved for `ai-doer` runtime fetches that cannot tolerate ~1d staleness."
+    },
+    "max_bytes": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 200000,
+      "default": 200000,
+      "description": "Optional per-call body cap, capped by `WEB_FETCH_MAX_BYTES=200000` (the agent's hard ceiling). Larger pages are truncated mid-stream and the response is flagged `truncated: true` so the consumer knows the plaintext is partial."
+    }
+  },
+  "additionalProperties": false
+}
