@@ -17,42 +17,21 @@
  * unit's `TimeoutStopSec` before SIGKILL.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname } from 'node:path';
 import { promises as dnsPromises } from 'node:dns';
 
 import { runBootCheck } from './boot-check.js';
 import { WebFetcherCache } from './cache.js';
 import { buildContractValidator } from './contracts.js';
+import { loadBraveApiKey } from './lib/brave-api-key.js';
 import { startRpcServer, type RunningRpcServer } from './rpc-server.js';
 
 const DEFAULT_DB_PATH = '/var/lib/ai-web-fetcher/cache.db';
 // systemd RuntimeDirectory=ai-web-fetcher creates /run/ai-web-fetcher/.
 // /var/run is a compat symlink to /run on every modern systemd distribution.
 const DEFAULT_SOCKET_PATH = '/run/ai-web-fetcher/query.sock';
-
-function loadBraveApiKey(): string | null {
-  const direct = process.env.BRAVE_SEARCH_API_KEY;
-  if (typeof direct === 'string' && direct.length > 0) {
-    return direct;
-  }
-  // systemd LoadCredential — sub-item 4b's service file mounts the key
-  // file under $CREDENTIALS_DIRECTORY/brave-api-key.
-  const credsDir = process.env.CREDENTIALS_DIRECTORY;
-  if (typeof credsDir === 'string' && credsDir.length > 0) {
-    const credPath = resolve(credsDir, 'brave-api-key');
-    if (existsSync(credPath)) {
-      try {
-        const contents = readFileSync(credPath, 'utf8').trim();
-        if (contents.length > 0) return contents;
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-}
 
 async function main(): Promise<number> {
   const dbPath = process.env.WEB_DB_PATH ?? DEFAULT_DB_PATH;
