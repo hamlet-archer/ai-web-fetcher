@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops.hamlet-archer/contracts/web.search.v1.json",
+  "title": "web.search (v1) — RPC request",
+  "description": "Search request for the web-fetcher Unix-socket RPC. Filed 2026-05-10 with v0.45 §6.8 — second grounding-source contract feeding Phase 3's `## Constraints` section. Calendar-adviser ships first, web-fetcher second, roster-adviser third.\n\nTransport: Unix socket at `/var/run/ai-web-fetcher/query.sock`. Caller authenticated via SO_PEERCRED (kernel uid matched against per-agent uid table in registry). `caller_agent_id` in payload is self-asserted for legibility only.\n\nv1 backend: Brave Search API (~$3/1k queries). No LLM-built-in web search; no headless browser; no Google CSE. The receiver enforces the per-day / per-task / per-month spend caps documented in the agent registry (WEB_OPS_PER_DAY=50, WEB_OPS_PER_TASK=5, WEB_BUDGET_USD_MONTH=5) — over-cap calls return error code `budget_exhausted` rather than partial results, per AP-6 / AP-8.\n\nAllowlist gate: results are filtered to the seed-domain allowlist at `registry/web-allowlist.yaml`. Off-allowlist results are dropped silently (not an error — the search backend does not know the allowlist; v1 is conservative). Agent boot self-check DNS-resolves and HEAD-probes every allowlist entry; failure = exit-1 (AP-4).\n\nai-doer / chief-of-staff are the v1 callers. Phase 3's `## Constraints` precompute emits `(external lookup unavailable)` if the RPC is down, the budget is exhausted, or the allowlist filter strips every result — never substitutes plausible-looking content (AP-1).\n\nStatus: draft. Do not flip to active until web-fetcher implementation ships and its boot self-check passes once on `golden-ai-ops`.",
+  "type": "object",
+  "required": [
+    "contract_id",
+    "trace_id",
+    "dedupe_key",
+    "source_ref",
+    "caller_agent_id",
+    "query"
+  ],
+  "properties": {
+    "contract_id": {
+      "type": "string",
+      "const": "web.search.v1",
+      "description": "Contract identifier. Must be the literal string 'web.search.v1'."
+    },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "UUIDv7 generated at the caller's entry point. Logged in the per-fetch provenance row."
+    },
+    "dedupe_key": {
+      "type": "string",
+      "description": "SHA256 of '<caller_agent_id>:web.search.v1:<query_canonical>:<top_n>:<freshness>:<site_filter|empty>'."
+    },
+    "source_ref": {
+      "type": "string",
+      "description": "URL or ID of the caller context that triggered this query (e.g. an ops.db Runs row id, a task UUID, a Slack thread ts). Stored in the provenance row for audit-trail back to the originating job."
+    },
+    "caller_agent_id": {
+      "type": "string",
+      "description": "Self-asserted agent ID of the caller. Authorisation decisions key off SO_PEERCRED uid, not this value."
+    },
+    "query": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 200,
+      "description": "Free-text search query, passed to Brave Search verbatim after a trim. Receiver applies a `<UNTRUSTED_WEB>` delimiter wrap before any downstream LLM consumption — the query string itself is treated as data, never as a prompt instruction."
+    },
+    "top_n": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "default": 5,
+      "description": "How many ranked results to return after allowlist filtering. The Brave query may pull more rows server-side; the response is capped at top_n after filter."
+    },
+    "freshness": {
+      "type": "string",
+      "enum": ["any", "day", "week", "month", "year"],
+      "default": "any",
+      "description": "Brave's `freshness` parameter. 'any' is the default for cost; tighter windows cost the same but reduce noise for time-sensitive queries (e.g. 'AviraTax 2026 deadline')."
+    },
+    "site_filter": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "hostname"
+      },
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "description": "Optional narrowing to a subset of allowlist domains (e.g. only `gov.uk` for a benefits query). Supplied hostnames MUST already be on `registry/web-allowlist.yaml` — off-allowlist values return `bad_query`. Receiver intersects with allowlist; result set is the intersection."
+    }
+  },
+  "additionalProperties": false
+}
